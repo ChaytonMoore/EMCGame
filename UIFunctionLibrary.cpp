@@ -3,7 +3,12 @@
 
 #include "UIFunctionLibrary.h"
 #include "..\Public\UIFunctionLibrary.h"
+#include "Components/WidgetComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "GenericFunctions.h"
+#include "Engine/DataTable.h"
+#include "Containers/Map.h"
+#include "Engine.h"
 
 FString UUIFunctionLibrary::childhoodTextGeneration(int stage, int cultureidx, bool gender, FString choice1, int choice2, int choice3, int choice4,int choice1i)
 {
@@ -114,6 +119,11 @@ FString UUIFunctionLibrary::childhoodTextGeneration(int stage, int cultureidx, b
 			fsOutput = "Instead of pursuing an honourable carear, you became a thief learning to take what was not yours.";
 		}
 	}
+	if (stage == 5)
+	{
+		fsOutput = "For what ever reason you decided to go to Eragrim a country beset with civil war: perhaps it was to make your fortune adventuring or serve as a mercenary. You set sail on a ship.";
+	}
+		
 	return FString(fsOutput);
 }
 
@@ -415,10 +425,11 @@ FAttribution UUIFunctionLibrary::AttributesInit(int cultureidx, int choice1i, in
 bool UUIFunctionLibrary::DialogueCheck(TArray<FString> PlayerNeed, TArray<FString> PlayerCant, TArray<FString> NPCNeed, TArray<FString> NPCCant, TArray<FString> WorldNeed, TArray<FString> WorldCant, TArray<FString> PlayerObjs, TArray<FString> NPCObjs, TArray<FString> WorldObjs)
 {
 	bool Output = true;
-
+	
 	for (size_t i = 0; i < (PlayerNeed.Num()); i++)		//Checks to make sure that all of the required objs are there
 	{
-		if (! PlayerObjs.Contains(PlayerNeed[i])) {
+		if (! PlayerObjs.Contains(PlayerNeed[i])) 
+		{
 			Output = false;
 		}
 	}
@@ -454,12 +465,117 @@ bool UUIFunctionLibrary::DialogueCheck(TArray<FString> PlayerNeed, TArray<FStrin
 
 	for (size_t i = 0; i < (PlayerCant.Num()); i++)			
 	{
-		if (PlayerObjs.Contains(NPCCant[i])) {
+		if (PlayerObjs.Contains(PlayerCant[i])) {
 			Output = false;
 		}
 	}
 
 	return Output;
+}
+
+void UUIFunctionLibrary::RemoveChildren(UPanelWidget* ParentObject)
+{
+	TArray<UWidget*> ChildObjects;
+	ChildObjects =  ParentObject->GetAllChildren();
+	for (size_t i = 0; i < ChildObjects.Num(); i++)
+	{
+		ChildObjects[i]->RemoveFromParent();
+	}
+}
+
+TArray<FString> UUIFunctionLibrary::DialogueAddRemoveObjs(TArray<FString> MainArray, TArray<FString> AddObjs, TArray<FString> RemoveObjs)
+{
+	for (size_t i = 0; int(i) < AddObjs.Num(); i++)
+	{
+		if (! MainArray.Contains(AddObjs[i]))
+		{
+			MainArray.Add(AddObjs[i]);
+		}
+	}
+	for (size_t i = 0; int(i) < RemoveObjs.Num(); i++)
+	{
+		if (MainArray.Contains(RemoveObjs[i]))
+		{
+			MainArray.Remove(RemoveObjs[i]);
+		}
+	}
+
+	return TArray<FString>(MainArray);
+}
+
+float UUIFunctionLibrary::LocalItemPrice(float OriginalPrice, int SellerPersonality, int BuyerPersonality, int SellerIntelligence, int BuyerIntelligence, int SellerCharisma, int BuyerCharisma)
+{
+	float Output;
+	int BuyerStats;
+	int SellerStats;
+
+	BuyerStats = BuyerPersonality + (BuyerIntelligence * 1.1) + BuyerCharisma;
+	SellerStats = SellerPersonality + (SellerIntelligence * 1.1) + SellerCharisma;
+	//Make sure no divide by 0 happens
+	if (BuyerStats == 0)
+	{
+		BuyerStats = 1;
+	}
+
+	if (SellerStats ==0)
+	{
+		SellerStats = 1;
+	}
+
+
+	Output = sqrt(sqrt(SellerStats) * 1/(sqrt(BuyerStats)));
+	Output = Output * OriginalPrice;
+	Output = truncf(Output * 10) / 10;
+
+	return Output;
+}
+
+void UUIFunctionLibrary::PartiallyRemoveWidget(UUserWidget * Caller)
+{
+	Caller->GetWorld()->GetFirstPlayerController()->bShowMouseCursor = false;
+	Caller->RemoveFromParent();
+}
+
+FText UUIFunctionLibrary::GetQuestTitle(TMap<class UDataTable*, int> Quests, int idx)
+{
+	FText Output;
+	FString ContextString; //This just makes it work
+	TArray<class UDataTable*> DataTableRefs;
+	Quests.GetKeys(DataTableRefs);
+	FQuestStruct* DataRowRef = DataTableRefs[idx]->FindRow<FQuestStruct>(FName(TEXT("0")), ContextString, true);
+	Output = DataRowRef->Name;
+
+	return FText(Output);
+}
+
+FText UUIFunctionLibrary::GetQuestDescription(TMap<class UDataTable*, int> Quests, int idx)
+{
+	FText Output;
+	FString ContextString;
+	TArray<class UDataTable*> DataTableRefs;
+	Quests.GetKeys(DataTableRefs);
+	TArray<FName> RowNames = DataTableRefs[idx]->GetRowNames();
+
+	FQuestStruct* DataRowRef = DataTableRefs[idx]->FindRow<FQuestStruct>(FName(TEXT("0")), ContextString, true); //The initial value
+	Output = DataRowRef->Description;
+	
+	//Now for if there is a difference in the description for that quest
+
+	TArray<int> QuestValues;
+	Quests.GenerateValueArray(QuestValues);
+	FName TempName = FName(*FString::FromInt(QuestValues[idx]));
+
+	//Should probably do some validation here
+	if (DataTableRefs[idx]->GetRowNames().Contains(TempName))
+	{
+		if (DataTableRefs[idx]->FindRow<FQuestStruct>(TempName, ContextString, true)->Description.ToString() != FString("")) //Checks to see if the description is not empty
+		{
+			Output = DataTableRefs[idx]->FindRow<FQuestStruct>(TempName, ContextString, true)->Description;
+		}
+	}
+
+
+	return FText(Output);
 }
 
 
