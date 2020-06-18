@@ -5,11 +5,10 @@
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "Humanoid.h"
+#include "Components/PanelWidget.h"
+#include "Engine/DataTable.h"
 #include "UIFunctionLibrary.generated.h"
 
-/**
- * 
- */
 UCLASS()
 class EMCGAME_API UUIFunctionLibrary : public UBlueprintFunctionLibrary
 {
@@ -24,5 +23,22 @@ class EMCGAME_API UUIFunctionLibrary : public UBlueprintFunctionLibrary
 	UFUNCTION(BlueprintPure, BlueprintCallable, Category = "Dialogue")
 		static bool DialogueCheck(TArray<FString> PlayerNeed, TArray<FString> PlayerCant, TArray<FString> NPCNeed, TArray<FString> NPCCant, TArray<FString> WorldNeed, TArray<FString> WorldCant, TArray<FString> PlayerObjs, TArray<FString> NPCObjs, TArray<FString> WorldObjs);
 	
+	UFUNCTION(BlueprintCallable, Category = "UI Function")
+		static void RemoveChildren(UPanelWidget* ParentObject);
+
+	UFUNCTION(BlueprintPure, BlueprintCallable, Category = "UI Function")
+		static TArray<FString> DialogueAddRemoveObjs(TArray<FString> MainArray, TArray<FString> AddObjs, TArray<FString> RemoveObjs);
+
+	UFUNCTION(BlueprintPure, BlueprintCallable, Category = "Merchant Function")
+		static float LocalItemPrice(float OriginalPrice, int SellerPersonality, int BuyerPersonality, int SellerIntelligence, int BuyerIntelligence, int SellerCharisma, int BuyerCharisma);
 	
+
+	UFUNCTION(BlueprintCallable, Category = "UI Function")
+		static void PartiallyRemoveWidget(UUserWidget* Caller);
+
+	UFUNCTION(BlueprintCallable, Category = "UI Function")
+		static FText GetQuestTitle(TMap<class UDataTable*, int> Quests, int idx);
+
+	UFUNCTION(BlueprintCallable, Category = "UI Function")
+		static FText GetQuestDescription(TMap<class UDataTable*, int> Quests, int idx);
 };
