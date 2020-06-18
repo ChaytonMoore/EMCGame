@@ -5,8 +5,10 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "GoodsStore.h"
+#include "Engine/DataTable.h"
 #include "Humanoid.h" //This is only because human is a blueprint class so can't be referenced here easily.
 #include "Materials/Material.h"
+#include "Engine/UserDefinedStruct.h"
 #include "SettlementNode.generated.h"
 
 
@@ -14,7 +16,7 @@ USTRUCT(BlueprintType)
 struct FItemsCPP
 {
 	GENERATED_BODY()
-		UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere)
 		FText Name;
 	UPROPERTY(EditAnywhere)
 		FText Description;
@@ -50,9 +52,9 @@ public:
 	// Sets default values for this actor's properties
 	ASettlementNode();
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Default")
-		FString name = "Unnamed";
+		FName SettlementName;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Default")
-		FString ownerEntity = "Unclaimed";
+		AHumanoid* ownerEntity = nullptr;
 
 protected:
 	// Called when the game starts or when spawned
@@ -83,10 +85,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Default")
 		float MiscCoef; //Everything else
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Default")
+		UDataTable* DataTable; //The item datatable
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Default")
+		UUserDefinedStruct* BPStruct; //The item datatable
+
 	//void RecalculateLocalEconemy();
 	//FTimerHandle MemberTimerHandle;
 	UFUNCTION(Category = "item")
-		static float FindFoodCoef(TArray<AGoodsStore*>StorePlaces,TArray<AHumanoid*> People);
+		float FindFoodCoef(TArray<AGoodsStore*>StorePlaces,TArray<AHumanoid*> People);
 
 
 
