@@ -8,6 +8,9 @@
 #include "Engine/World.h"
 #include "..\Public\GenericFunctions.h"
 #include "UObject/NameTypes.h"
+#include "NavigationSystem.h"
+#include "HumanAIController.h"
+#include "BaseSpell.h"
 
 bool UGenericFunctions::PlayerPickingUp(AActor* caller, bool overlaping)
 {
@@ -33,7 +36,7 @@ TMap<FString, int> UGenericFunctions::AddItemToInventory(TMap<FString, int> Inve
 	return TMap<FString, int>(Inventory);
 }
 
-ADataBase * UGenericFunctions::GetDataBase(AActor* Caller)
+ADataBase * UGenericFunctions::GetDataBase(UObject* Caller)
 {
 	TArray<AActor*> OutputList; //This function requires an input it will crash if it doesn't have one.
 	UGameplayStatics::GetAllActorsOfClass(Caller->GetWorld(),ADataBase::StaticClass(),OutputList);
@@ -212,13 +215,279 @@ bool UGenericFunctions::EntityHealTick(AEntity * Caller)
 	return Output;
 }
 
+bool UGenericFunctions::SimpleEntityMoveScript(AEntity * EntityToMove, FVector Location, bool IgnoreAgro)
+{
+	AHumanAIController* EntityController = Cast<AHumanAIController>(EntityToMove->GetController());
+
+	if (EntityToMove->GetController())
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("yes"));
+	}
+	if (EntityController)
+	{
+		//Make sure of a successful cast.
+		EntityController->MoveToLocation(Location);
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+void UGenericFunctions::TeleportPlayer(AActor* Location)
+{
+	if (Location)
+	{
+		AHumanoid* PlayerCharacter = (AHumanoid*)UGameplayStatics::GetPlayerPawn(Location, 0);
+
+		PlayerCharacter->SetActorLocation(Location->GetActorLocation());
+		PlayerCharacter->SetActorRotation(Location->GetActorRotation());
+	}
+}
+
+void UGenericFunctions::TeleportPlayerParams(AActor* Location, float MagicChange, float StaminaChange, float HealthChange)
+{
+	//Same of the normal function, except this overload allows for changes to the users stats, aka climbing a ladder taskes stamina.
+	if (Location)
+	{
+		AHumanoid* PlayerCharacter = (AHumanoid*)UGameplayStatics::GetPlayerPawn(Location, 0);
+
+		PlayerCharacter->SetActorLocation(Location->GetActorLocation());
+		PlayerCharacter->SetActorRotation(Location->GetActorRotation());
+		PlayerCharacter->Health = PlayerCharacter->Health - HealthChange;
+		PlayerCharacter->Magic = PlayerCharacter->Magic - MagicChange;
+		PlayerCharacter->Stamina = PlayerCharacter->Stamina - StaminaChange;
+	}
+}
+
+bool UGenericFunctions::TryTeleportPlayer(AActor* Location, float MagicChange, float StaminaChange, float HealthChange)
+{
+	//Only allows the player to teleport if they have enough of a resource I imagine this'll mostly be magic for portals.
+	AHumanoid* PlayerCharacter = (AHumanoid*)UGameplayStatics::GetPlayerPawn(Location, 0);
+	bool output = false;
+	if (PlayerCharacter->Magic >= MagicChange && PlayerCharacter->Stamina >= StaminaChange && PlayerCharacter->Health >= HealthChange)
+	{
+		output = true;
+		TeleportPlayerParams(Location, MagicChange, StaminaChange, HealthChange);
+	}
+
+	return output;
+}
+
+bool UGenericFunctions::CanCastSpell(FMagicSpellStruct spell, AHumanoid* Caller)
+{
+	bool output = true;
+
+	//In most games the player must have enough magic to cast a spell however in this one stamina and health can be traded for magic, however this can kill the player.
+	if (SpellCost(spell) > (Caller->Magic + Caller->Health + Caller->Stamina * 0.2))//stamina isn't worth very much and is more of a warning that health will be taken.
+	{
+		output = false;
+	}
+
+	//They might be at a high enough level to cast it, will probably not use this too much.
+	if (spell.LevelReq > Caller->Level)
+	{
+		output = false;
+	}
+	//Was going to use a string and parse out the data but had a better idea.
+	//Split the map up and then see for each element if it is the right enum and if the value is correct, should lead to less errors.
+	for (auto& Elem : spell.SkillReq)
+	{
+		if (Elem.Key == 3 && Elem.Value > Caller->Skills.Healing)
+		{
+			output = false;
+		}
+		if (Elem.Key == 2 && Elem.Value > Caller->Skills.MagicalControl)
+		{
+			output = false;
+		}
+		if (Elem.Key == 1 && Elem.Value > Caller->Skills.MindTrickery)
+		{
+			output = false;
+		}
+		if (Elem.Key == 0 && Elem.Value > Caller->Skills.Annihilation)
+		{
+			output = false;
+		}
+	}
+	return output;
+}
+
+int UGenericFunctions::SpellCost(FMagicSpellStruct spell)
+{
+	int output = 0;
+	if (spell.FXEssenceOveride > 0)
+	{
+		output = spell.FXEssenceOveride;
+	}
+	else
+	{
+		for (size_t i = 0; i < spell.Effects.Num(); i++)
+		{
+			output += spell.Effects[i].FXEssence;
+		}
+	}
+
+	return output;
+}
+//int Randint(int low, int high)
+//{
+	//return  rand() % (high - low) + low;
+//}
+bool UGenericFunctions::CastSpell(FMagicSpellStruct spell, AHumanoid* Caller)
+{
+	bool success = UGenericFunctions::CanCastSpell(spell, Caller);
+	//Made sure it can spawn
+	ABaseSpell* SpellSpawned;
+	if (success && Caller)
+	{
+		FActorSpawnParameters SpawnParams;
+		for (size_t i = 0; i < spell.Effects.Num(); i++)
+		{
+		
+			SpellSpawned = Caller->GetWorld()->SpawnActor<ABaseSpell>(spell.Effects[i].FXscript, Caller->GetActorLocation(), Caller->GetActorRotation(), SpawnParams);
+			SpellSpawned->Caller = Caller;
+		}
+		//Now to subtract the magic used from the users supply
+		Caller->Magic -= SpellCost(spell);
+		if (Caller->Magic < 0)
+		{
+			if (abs(Caller->Magic) > (Caller->Stamina * 0.2)) //stamina is worth less than health or essence(magic)
+			{
+				Caller->Stamina = 0;
+				Caller->Health -= abs(Caller->Magic) - (Caller->Stamina * 0.2);
+
+			}
+			else
+			{
+				Caller->Stamina -= abs(Caller->Magic) * 5;
+			}
+			Caller->Magic = 0;
+		}
+		//The chance of getting xp decreases with the difference in level between player and spell, hence removing level farming to some degree
+		int chance = rand() % (10 +(spell.LevelReq - Caller->Level));
+		if (chance == 0)
+		{
+			Caller->TotalXP += 50 + spell.LevelReq*5;
+		}
+		//The player also needs a small change to increase their skill
+		chance = rand() % (15 + (spell.LevelReq - Caller->Level) * 3);
+		if(chance == 0)
+		{
+			//Now to select which skill needs to be updated.
+			if (spell.Type == 0)
+			{
+				Caller->Skills.Annihilation += 1;
+			}
+			else if(spell.Type == 1)
+			{
+				Caller->Skills.MindTrickery += 1;
+			}
+			else if(spell.Type == 2)
+			{
+				Caller->Skills.MagicalControl += 1;
+			}
+			else
+			{
+				Caller->Skills.Healing += 1;
+			}
+		}
+
+	}
 
 
+	return success;
+}
+
+bool UGenericFunctions::HealEntity(AEntity* Caller, float amount)
+{
+	bool output = false;
+	if (Caller)
+	{
+		Caller->Health += amount;
+		output = true;
+	}
+	return output;
+	
+}
+
+bool UGenericFunctions::RestoreStaminaEntity(AEntity* Caller, float amount)
+{
+	bool output = false;
+	if (Caller)
+	{
+		Caller->Stamina += amount;
+		output = true;
+	}
+	return output;
+
+}
+
+bool UGenericFunctions::RestoreEssenceEntity(AEntity* Caller, float amount)
+{
+	bool output = false;
+	if (Caller)
+	{
+		Caller->Magic += amount;
+		output = true;
+	}
+	return output;
+}
+
+void UGenericFunctions::CalculateStats(AHumanoid* Caller)
+{
+	//Here is where primary stats of the player are calculated. Magic is the skills and the essence
+	Caller->MaxMagic = Caller->Attributes.Essence * 5 + Caller->Attributes.Intelligence + Caller->Skills.Healing + Caller->Skills.Annihilation + Caller->Skills.MindTrickery + Caller->Skills.MagicalControl;
+	//Health is endurance and strength but acrobatics factos in aka dodging and block as how well can you take a hit.
+	Caller->MaxHealth = Caller->Skills.Acrobatics + Caller->Skills.Block + Caller->Attributes.Endurance * 9 + Caller->Attributes.Strength * 9;
+	//stamina is mainly endurance but strength helps. Acrobatics and dexterity is basicly efficiency(how well you can use it)
+	Caller->MaxStamina = Caller->Attributes.Endurance * 16 + Caller->Attributes.Strength * 2 + Caller->Skills.Acrobatics + Caller->Attributes.Dexterity;
+}
+
+TArray<FString> UGenericFunctions::RemoveElementsFromArrayString(TArray<FString> Main, TArray<FString> RemoveElems)
+{
+	for (size_t i = 0; i < RemoveElems.Num(); i++)
+	{
+		if (Main.Contains(RemoveElems[i]))
+		{
+			Main.Remove(RemoveElems[i]);
+		}
+	}
+	return Main;
+}
 
 
+void UGenericFunctions::MagicAtZeroRefil(AHumanoid* Caller)
+{
+	//This function checks if the player has an amulet of restore magic, if they do it is used to resture their magic to full but has a chance of breaking.
+	if (Caller->Inventory.Contains("Magicamulet"))
+	{
+		Caller->Magic = Caller->MaxMagic;
+		if (rand() % 4 == 0)
+		{
+			Caller->Inventory = RemoveItemFromInventory(Caller->Inventory, "Magicamulet",1);
+		}
+	}
 
+}
 
+FRotator UGenericFunctions::AddRotator(FRotator first, FRotator second)
+{
+	first.Pitch += second.Pitch;
+	first.Yaw += second.Yaw;
+	first.Roll += second.Roll;
 
+	return first;
+}
+
+int UGenericFunctions::SumInt(TArray<int>)
+{
+	int output = 0;
+	
+	
+	return output;
+}
 //AHumanoid * UGenericFunctions::GetPlayerHumanoid()
 //{
 //	AHumanoid* Output = Cast<AHumanoid>(UGameplayStatics::GetPlayerPawn);
