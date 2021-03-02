@@ -1,0 +1,30 @@
+// Fill out your copyright notice in the Description page of Project Settings.
+
+
+#include "PublicScripting/NPCHouseDoor.h"
+#include "Components/ArrowComponent.h"
+#include "GenericFunctions.h"
+
+// Sets default values
+ANPCHouseDoor::ANPCHouseDoor()
+{
+ 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
+	PrimaryActorTick.bCanEverTick = true;
+	UArrowComponent* Arrow = CreateDefaultSubobject<UArrowComponent>(TEXT("Arrow"));
+
+}
+
+// Called when the game starts or when spawned
+void ANPCHouseDoor::BeginPlay()
+{
+	Super::BeginPlay();
+	
+}
+
+// Called every frame
+void ANPCHouseDoor::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+}
+
