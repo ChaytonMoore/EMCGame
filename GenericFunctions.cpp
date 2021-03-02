@@ -4,6 +4,7 @@
 #include "GenericFunctions.h"
 #include "CoreMinimal.h"
 #include "Engine.h"
+
 #include "EngineMinimal.h"
 #include "Engine/World.h"
 #include "..\Public\GenericFunctions.h"
@@ -11,11 +12,44 @@
 #include "NavigationSystem.h"
 #include "HumanAIController.h"
 #include "BaseSpell.h"
+#include "Containers/UnrealString.h"
 
 bool UGenericFunctions::PlayerPickingUp(AActor* caller, bool overlaping)
 {
 	//caller->GetWorld()->GetFirstPlayerController->GetPawn();
 	return false;
+}
+
+ void UGenericFunctions::SetNPCHumanHealthOnAttack(AHumanoid* Human, float Damage,class UDataTable* Armour)
+{
+	 int TotalArmour;
+
+	 FString ContextString;
+	 int helm = 0, chest = 0, hands = 0, feet = 0, legs = 0;
+	 if (Armour->FindRow<FArmourStruct>(Human->HelmA, ContextString, true))
+	 {
+		 helm = Armour->FindRow<FArmourStruct>(Human->HelmA, ContextString, true)->ArmourValue;
+	 }
+	 if (Armour->FindRow<FArmourStruct>(Human->BodyA, ContextString, true))
+	 {
+		 chest = Armour->FindRow<FArmourStruct>(Human->BodyA, ContextString, true)->ArmourValue;
+	 }
+	 if (Armour->FindRow<FArmourStruct>(Human->HandsA, ContextString, true))
+	 {
+		 hands = Armour->FindRow<FArmourStruct>(Human->HandsA, ContextString, true)->ArmourValue;
+	 }
+	 if (Armour->FindRow<FArmourStruct>(Human->BootsA, ContextString, true))
+	 {
+		 feet = Armour->FindRow<FArmourStruct>(Human->BootsA, ContextString, true)->ArmourValue;
+	 }
+	 if (Armour->FindRow<FArmourStruct>(Human->LegsA, ContextString, true))
+	 {
+		 legs = Armour->FindRow<FArmourStruct>(Human->LegsA, ContextString, true)->ArmourValue;
+	 }
+	 TotalArmour = (helm * 2 + chest * 2 + hands + feet + legs) / 7;
+	 
+	 Damage = Damage - ((float)TotalArmour / 100);
+	 Human->Health -= Damage;
 }
 
 TMap<FString, int> UGenericFunctions::AddItemToInventory(TMap<FString, int> Inventory, FString Item, int Number)
@@ -75,15 +109,20 @@ TMap<FString, int> UGenericFunctions::ChangeMoneyValue(TMap<FString, int> Origin
 	//I think the maths above should work.
 	if (MoneyChange < 0)
 	{
-		int IntMoney = abs(MoneyChange * 10);
-		int MankasNum = div(MoneyChange, 360).quot;
-		int ShillingNum = div(div(MoneyChange, 360).rem, 12).quot;
-		int PennyNum = IntMoney - (MankasNum * 360 + ShillingNum * 12);
+		int TotalValue = (*OriginalInventory.Find("mankas")) * 360 + (*OriginalInventory.Find("shilling")) * 12 + (*OriginalInventory.Find("penny"));
+		TotalValue += MoneyChange * 10;
+		if (TotalValue>1)
+		{
+			int MankasValue = (TotalValue / 360);
+			int ShillingValue = (TotalValue - MankasValue / 12);
+			int PennyValue = TotalValue - MankasValue * 360 - ShillingValue * 12;
 
-		OriginalInventory = RemoveItemFromInventory(OriginalInventory, "mankas", MankasNum);
-		OriginalInventory = RemoveItemFromInventory(OriginalInventory, "shilling", ShillingNum);
-		OriginalInventory = RemoveItemFromInventory(OriginalInventory, "penny", PennyNum);
-		//Remove each item from inventory
+			//OriginalInventory.Remove("mankas");
+			//GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, FString::Printf(TEXT("penny %f"), float(PennyValue)));
+			//OriginalInventory = AddItemToInventory(OriginalInventory, "mankas", MankasValue);
+			//OriginalInventory = AddItemToInventory(OriginalInventory, "shilling", ShillingValue);
+			//OriginalInventory = AddItemToInventory(OriginalInventory, "penny", PennyValue);
+		}
 	}
 	else
 	{
@@ -335,7 +374,7 @@ int UGenericFunctions::SpellCost(FMagicSpellStruct spell)
 //{
 	//return  rand() % (high - low) + low;
 //}
-bool UGenericFunctions::CastSpell(FMagicSpellStruct spell, AHumanoid* Caller)
+bool UGenericFunctions::CastSpell(FMagicSpellStruct spell, AHumanoid* Caller, FRotator DesiredRotation)
 {
 	bool success = UGenericFunctions::CanCastSpell(spell, Caller);
 	//Made sure it can spawn
@@ -346,7 +385,7 @@ bool UGenericFunctions::CastSpell(FMagicSpellStruct spell, AHumanoid* Caller)
 		for (size_t i = 0; i < spell.Effects.Num(); i++)
 		{
 		
-			SpellSpawned = Caller->GetWorld()->SpawnActor<ABaseSpell>(spell.Effects[i].FXscript, Caller->GetActorLocation(), Caller->GetActorRotation(), SpawnParams);
+			SpellSpawned = Caller->GetWorld()->SpawnActor<ABaseSpell>(spell.Effects[i].FXscript, Caller->GetActorLocation(), DesiredRotation, SpawnParams);
 			SpellSpawned->Caller = Caller;
 		}
 		//Now to subtract the magic used from the users supply
@@ -481,13 +520,172 @@ FRotator UGenericFunctions::AddRotator(FRotator first, FRotator second)
 	return first;
 }
 
-int UGenericFunctions::SumInt(TArray<int>)
+int UGenericFunctions::SumInt(TArray<int> values)
 {
 	int output = 0;
-	
+	for (size_t i = 0; i < values.Num(); i++)
+	{
+		output += values[i];
+	}
 	
 	return output;
 }
+
+
+bool UGenericFunctions::ApproxFloat(float a, float b)
+{
+	//is it within 0.1 of the other float
+	return abs(a - b) <= 0.1;
+}
+
+FVector UGenericFunctions::RandomVectorInRadius(FVector Start, int Radius)
+{
+	//Not for AI. This is flat 2D and not local
+	int a = rand() % Radius - Radius / 2;
+	int b = rand() % Radius - Radius / 2;
+
+	Start.X += a;
+	Start.Y += b;
+
+	return Start;
+}
+
+bool UGenericFunctions::HasSimilarString(TArray<FString> a, TArray<FString> b)
+{
+	bool output = false;
+	for (size_t i = 0; i < a.Num(); i++)
+	{
+		if (b.Contains(a[i]))
+		{
+			output = true;
+			break;
+		}
+	}
+
+	return output;
+}
+
+float UGenericFunctions::HealthFromAttack(class UDataTable* Items, class UDataTable* Weapons, class UDataTable* Armour, AHumanoid* Attacker, AHumanoid* Defender)
+{
+	float output = Defender->Health;
+	//float Attack;
+	//FName Right = Attacker->EquipmentRight;
+	FString ContextString;
+	FWeaponStruct* WeaponRowRef = Weapons->FindRow<FWeaponStruct>(Attacker->EquipmentRight, ContextString, true);
+	float WeaponDamage = WeaponRowRef->Damage;
+
+	//Now to calculate the armour value.
+	//Armour works by each piece having an integer value between 0 and 100(non inclusive) this is what percentage of the damage it blocks. To calculate total armour the average of all pieces 
+	//is found with the helmet and chestplate having a double weighting.
+	int helm = 0, chest = 0, hands = 0, feet = 0, legs = 0;
+	if (Armour->FindRow<FArmourStruct>(Defender->HelmA, ContextString, true))
+	{
+		helm = Armour->FindRow<FArmourStruct>(Defender->HelmA, ContextString, true)->ArmourValue; 
+	}
+	if (Armour->FindRow<FArmourStruct>(Defender->BodyA, ContextString, true))
+	{
+		chest = Armour->FindRow<FArmourStruct>(Defender->BodyA, ContextString, true)->ArmourValue;
+	}
+	if (Armour->FindRow<FArmourStruct>(Defender->HandsA, ContextString, true))
+	{
+		hands = Armour->FindRow<FArmourStruct>(Defender->HandsA, ContextString, true)->ArmourValue;
+	}
+	if (Armour->FindRow<FArmourStruct>(Defender->BootsA, ContextString, true))
+	{
+		feet = Armour->FindRow<FArmourStruct>(Defender->BootsA, ContextString, true)->ArmourValue;
+	}
+	if (Armour->FindRow<FArmourStruct>(Defender->LegsA, ContextString, true))
+	{
+		legs = Armour->FindRow<FArmourStruct>(Defender->LegsA, ContextString, true)->ArmourValue;
+	}
+
+	float TotalArmourValue = (helm * 2 + chest * 2 + hands + feet + legs) / 700.0;
+
+	//Get relavent attack skill
+	int AttackSkill = 0;
+	if (WeaponRowRef->type == "1h_sword" || WeaponRowRef->type == "1h_axe"|| WeaponRowRef->type == "1h_blunt")
+	{
+		AttackSkill = Attacker->Skills.OneHanded;
+	}
+	else if(WeaponRowRef->type == "2h")
+	{
+		AttackSkill = Attacker->Skills.TwoHanded;
+	}
+	else
+	{
+		AttackSkill = Attacker->Skills.Polearms;
+	}
+
+
+	GEngine->AddOnScreenDebugMessage(-10, 1.f, FColor::Yellow, FString::Printf(TEXT("skill: %f"), AttackSkill));
+	GEngine->AddOnScreenDebugMessage(-10, 1.f, FColor::Yellow, FString::Printf(TEXT("weapondaamage before: %f"), WeaponDamage));
+	WeaponDamage = WeaponDamage * ((AttackSkill * 2) / (Defender->Skills.Acrobatics + Defender->Skills.Block)) * (1 - TotalArmourValue) *(((Attacker->Stamina)/(Attacker->MaxStamina)+1)/(1+(Defender->Stamina)/(Defender->MaxStamina)));
+
+
+	GEngine->AddOnScreenDebugMessage(-10, 1.f, FColor::Yellow, FString::Printf(TEXT("weapondaamage: %f"), WeaponDamage));
+	output -= WeaponDamage;
+	//Check if the entity has been killed
+	if (Defender->Health <= 0)
+	{
+		Defender->OnDeathParamsHumanoid(Attacker);
+	}
+	//This is enough for right now
+	output -= WeaponRowRef->Damage;
+	return output;
+}
+
+TArray<AActor*> UGenericFunctions::PureRemoveItem(TArray<AActor*> list, AActor* item)
+{
+	if (list.Contains(item))
+	{
+		list.Remove(item);
+	}
+	return list;
+}
+
+AEntity* UGenericFunctions::NearestEntity(TArray<AEntity*> Entities, AActor* selfRef)
+{
+	if (Entities.Num() > 0)
+	{
+		AEntity* output;
+		output = Entities[0];
+		for (size_t i = 1; i < Entities.Num(); i++)
+		{
+			if (Entities[i]->GetDistanceTo(selfRef) < output->GetDistanceTo(selfRef))
+			{
+				output = Entities[i];
+			}
+		}
+		return output;
+	}
+	else
+	{
+		return nullptr;
+	}
+}
+
+void UGenericFunctions::Reinitconstructor(AActor * toReinit)
+{
+	toReinit->RerunConstructionScripts();
+}
+
+AActor*  UGenericFunctions::GetNearestActor(AActor* selfRef, TArray<AActor*> Others)
+{
+	float shortest = 1000000000;
+	AActor* output = nullptr;
+	for (size_t i = 0; i < Others.Num(); i++)
+	{
+		if (FVector::Dist(selfRef->GetActorLocation(),Others[i]->GetActorLocation())<shortest)
+		{
+			shortest = FVector::Dist(selfRef->GetActorLocation(), Others[i]->GetActorLocation());
+			output = Others[i];
+		}
+	}
+	return output;
+
+}
+
+
 //AHumanoid * UGenericFunctions::GetPlayerHumanoid()
 //{
 //	AHumanoid* Output = Cast<AHumanoid>(UGameplayStatics::GetPlayerPawn);
