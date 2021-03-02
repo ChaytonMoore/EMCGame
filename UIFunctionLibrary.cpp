@@ -298,7 +298,30 @@ FSkills UUIFunctionLibrary::SkillsInit(int cultureidx, int choice1i, int choice2
 
 
 
+
 	return FSkills(Output);
+}
+
+TArray<FString> UUIFunctionLibrary::SpellsInit(int choice3, int choice4)
+{
+	TArray<FString> output;
+
+	if (choice3 == 4)//Magic
+	{
+		output.Add("FireBall");
+		output.Add("RestoreStamina");
+	}
+
+	if (choice4 == 3)
+	{
+		if (!output.Contains("FireBall"))
+		{
+			output.Add("FireBall");
+		}
+		output.Add("Minorheal");
+
+	}
+	return output;
 }
 
 FAttribution UUIFunctionLibrary::AttributesInit(int cultureidx, int choice1i, int choice2, int choice3, int choice4, bool gender)
@@ -523,7 +546,8 @@ float UUIFunctionLibrary::LocalItemPrice(float OriginalPrice, int SellerPersonal
 	}
 
 
-	Output = sqrt(sqrt(SellerStats) * 1/(sqrt(BuyerStats)));
+	//Output = sqrt(sqrt(SellerStats) * 1/(sqrt(BuyerStats)));
+	Output = 1;
 	Output = Output * OriginalPrice;
 	Output = truncf(Output * 10) / 10;
 
@@ -536,46 +560,428 @@ void UUIFunctionLibrary::PartiallyRemoveWidget(UUserWidget * Caller)
 	Caller->RemoveFromParent();
 }
 
-FText UUIFunctionLibrary::GetQuestTitle(TMap<class UDataTable*, int> Quests, int idx)
+FText UUIFunctionLibrary::GetQuestTitle(TMap<class UDataTable*, int> Quests, int idx, FName zerovalue)
 {
+	//GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("init"));
 	FText Output;
 	FString ContextString; //This just makes it work
-	TArray<class UDataTable*> DataTableRefs;
-	Quests.GetKeys(DataTableRefs);
-	FQuestStruct* DataRowRef = DataTableRefs[idx]->FindRow<FQuestStruct>(FName(TEXT("0")), ContextString, true);
-	Output = DataRowRef->Name;
-
+	//GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("done pre if"));
+	if (Quests.Num() > 0 && Quests.Num() > idx)
+	{
+		//GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("first if"));
+		TArray<class UDataTable*> DataTableRefs;
+		Quests.GetKeys(DataTableRefs);
+		if (DataTableRefs.Num() > idx)
+		{
+			if (DataTableRefs[idx] !=nullptr)
+			{
+				FQuestStruct* DataRowRef = DataTableRefs[idx]->FindRow<FQuestStruct>(zerovalue, ContextString, true);
+				//GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("first if part complete"));
+				if (DataRowRef)
+				{
+					//GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("first if"));
+					Output = DataRowRef->Name;
+				}
+				else
+				{
+					//GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("second if fail"));
+					Output = FText::FromString(ANSI_TO_TCHAR("No active quests"));
+				}
+			}
+			else
+			{
+				//GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("second if fail"));
+				Output = FText::FromString(ANSI_TO_TCHAR("No active quests"));
+			}
+		}
+		else
+		{
+			//GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("second if fail"));
+			Output = FText::FromString(ANSI_TO_TCHAR("No active quests"));
+		}
+	}
+	else
+	{ //Just incase there are no quests
+		//GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("first if fail"));
+		Output = FText::FromString(ANSI_TO_TCHAR("No active quests")); 
+	}
+	//GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("done"));
 	return FText(Output);
 }
 
-FText UUIFunctionLibrary::GetQuestDescription(TMap<class UDataTable*, int> Quests, int idx)
+FText UUIFunctionLibrary::GetQuestDescription(TMap<class UDataTable*, int> Quests, int idx, FName zerovalue)
 {
 	FText Output;
 	FString ContextString;
-	TArray<class UDataTable*> DataTableRefs;
-	Quests.GetKeys(DataTableRefs);
-	TArray<FName> RowNames = DataTableRefs[idx]->GetRowNames();
-
-	FQuestStruct* DataRowRef = DataTableRefs[idx]->FindRow<FQuestStruct>(FName(TEXT("0")), ContextString, true); //The initial value
-	Output = DataRowRef->Description;
-	
-	//Now for if there is a difference in the description for that quest
-
-	TArray<int> QuestValues;
-	Quests.GenerateValueArray(QuestValues);
-	FName TempName = FName(*FString::FromInt(QuestValues[idx]));
-
-	//Should probably do some validation here
-	if (DataTableRefs[idx]->GetRowNames().Contains(TempName))
+	if (Quests.Num() > idx)
 	{
-		if (DataTableRefs[idx]->FindRow<FQuestStruct>(TempName, ContextString, true)->Description.ToString() != FString("")) //Checks to see if the description is not empty
+		TArray<class UDataTable*> DataTableRefs;
+		Quests.GetKeys(DataTableRefs);
+		if (DataTableRefs.Num() > 0)
 		{
-			Output = DataTableRefs[idx]->FindRow<FQuestStruct>(TempName, ContextString, true)->Description;
+			if (DataTableRefs[idx] != nullptr)
+			{
+				TArray<FName> RowNames = DataTableRefs[idx]->GetRowNames();
+
+				FQuestStruct* DataRowRef = DataTableRefs[idx]->FindRow<FQuestStruct>(zerovalue, ContextString, true); //The initial value
+				if (DataRowRef)
+				{
+					Output = DataRowRef->Description;
+
+					//Now for if there is a difference in the description for that quest
+
+					TArray<int> QuestValues;
+					Quests.GenerateValueArray(QuestValues);
+					FName TempName = FName(*FString::FromInt(QuestValues[idx]));
+
+					//Should probably do some validation here
+					if (DataTableRefs[idx]->GetRowNames().Contains(TempName))
+					{
+						if (DataTableRefs[idx]->FindRow<FQuestStruct>(TempName, ContextString, true)->Description.ToString() != FString("")) //Checks to see if the description is not empty
+						{
+							Output = DataTableRefs[idx]->FindRow<FQuestStruct>(TempName, ContextString, true)->Description;
+						}
+					}
+				}
+				else
+				{ //Just incase there are no quests
+					Output = FText::FromString(ANSI_TO_TCHAR("No active quests"));
+				}
+			}
+			else
+			{ //Just incase there are no quests
+				Output = FText::FromString(ANSI_TO_TCHAR("No active quests"));
+			}
+		}
+		else
+		{ //Just incase there are no quests
+			Output = FText::FromString(ANSI_TO_TCHAR("No active quests"));
 		}
 	}
-
+	else
+	{ //Just incase there are no quests
+		Output = FText::FromString(ANSI_TO_TCHAR("No active quests"));
+	}
 
 	return FText(Output);
 }
 
+TArray<FString> UUIFunctionLibrary::AddElementToHotBar(TArray<FString> HotBarItems, FString NewElement)
+{
+	//First to shift all elements to the right by one. While it is a guarranteed array of 10 elements a static array won't be used.
 
+	if (!HotBarItems.Contains(NewElement))
+	{
+		for (size_t i = 1; i < HotBarItems.Num(); i++)
+		{
+				HotBarItems[HotBarItems.Num() - i] = HotBarItems[HotBarItems.Num() - (i + 1)];
+		}
+		HotBarItems[0] = NewElement;
+	}
+	return HotBarItems;
+}
+
+FText UUIFunctionLibrary::GetItemName(class UDataTable* table, FName ItemID)
+{
+	FText Output;
+	FString ContextString;
+	FItemStruct* ItemData = table->FindRow<FItemStruct>(ItemID, ContextString, true);
+	if (ItemData)
+	{
+		Output = ItemData->Name;
+
+	}
+	else
+	{
+		Output = FText::AsCultureInvariant(TEXT("Empty slot"));
+	}
+
+	return Output;
+}
+
+FText UUIFunctionLibrary::GetItemAndMagicName(class UDataTable* table, class UDataTable* MagicTable, FName ItemID)
+{
+	FText Output;
+	FString ContextString;
+	FItemStruct* ItemData = table->FindRow<FItemStruct>(ItemID, ContextString, true);
+	if (ItemData)
+	{
+		Output = ItemData->Name;
+
+	}
+	else
+	{
+		FMagicSpellStruct* MagicData = MagicTable->FindRow<FMagicSpellStruct>(ItemID, ContextString, true);
+		if (MagicData)
+		{
+			Output = MagicData->Name;
+
+		}
+		else
+		{
+			Output = FText::AsCultureInvariant(TEXT("Empty slot"));
+		}
+	}
+
+	return Output;
+
+}
+
+TArray<FString> UUIFunctionLibrary::CompileUseableItems(class UDataTable* table, TMap<FString, int> Items)
+{
+	TArray<FString> Output;
+	TArray<FString> ReturnOutput;
+	Items.GetKeys(Output);
+
+	FItemStruct* TempItem;
+	FString ContextString;
+
+	for (size_t i = 0; i < Output.Num(); i++)
+	{
+		TempItem = table->FindRow<FItemStruct>(FName(*Output[i]),ContextString,true);
+
+		if (TempItem)
+		{
+			if (TempItem->usable)
+			{
+				ReturnOutput.Add(Output[i]);
+			}
+			//GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("row is valid"));
+		}
+
+	}
+
+	return ReturnOutput;
+}
+
+bool UUIFunctionLibrary::CheckIfSpell(class UDataTable* table, FString Item)
+{
+	FMagicSpellStruct* ItemData = table->FindRow<FMagicSpellStruct>(FName(*Item),"",true);
+	return (ItemData);
+}
+
+FText UUIFunctionLibrary::GenerateSpellRecipe(FSpellMaking SpellToGenerate)
+{
+	//0 = start top
+	//1 = start main
+	//2 = start reserve
+	//3 = middle top
+	//4 = middle main
+	//5 = middle reserve
+	//6 = end top
+	//7 = end main
+	//8 = end reserve
+
+	FString Blue[3] = {"calm.","steady.","soft."};
+	FString Red[2] = {"speradic.","energetic."};
+	FString Green[3] = {"individual.","human like.","natural."};
+	FString Grey[2] = {"generic.","plain."};
+	FString SegmentStarts[3] = {"The start of the Spell.","The middle of the Spell","The end of the Spell"};
+	FString PartFlavourText[3] = {"The top of the spell must be,","For the majority of the spell must be,","For the magic reserves of the spell the magic must be,"};
+
+	FString StringData = "";
+	StringData += SegmentStarts[0];
+
+	StringData += PartFlavourText[0];
+	if (SpellToGenerate.SpellConfiguration[0] == 0)
+	{
+		StringData += Blue[rand() % 3];
+	}
+	else if (SpellToGenerate.SpellConfiguration[0] == 1)
+	{
+		StringData += Red[rand() % 2];
+	}
+	else if (SpellToGenerate.SpellConfiguration[0] == 2)
+	{
+		StringData += Green[rand() % 3];
+	}
+	else
+	{
+		StringData += Grey[rand() % 2];
+	}
+
+
+	StringData += PartFlavourText[1];
+
+	if (SpellToGenerate.SpellConfiguration[1] == 0)
+	{
+		StringData += Blue[rand() % 3];
+	}
+	else if (SpellToGenerate.SpellConfiguration[1] == 1)
+	{
+		StringData += Red[rand() % 2];
+	}
+	else if (SpellToGenerate.SpellConfiguration[1] == 2)
+	{
+		StringData += Green[rand() % 3];
+	}
+	else
+	{
+		StringData += Grey[rand() % 2];
+	}
+
+	StringData += PartFlavourText[2];
+
+	if (SpellToGenerate.SpellConfiguration[2] == 0)
+	{
+		StringData += Blue[rand() % 3];
+	}
+	else if (SpellToGenerate.SpellConfiguration[2] == 1)
+	{
+		StringData += Red[rand() % 2];
+	}
+	else if (SpellToGenerate.SpellConfiguration[2] == 2)
+	{
+		StringData += Green[rand() % 3];
+	}
+	else
+	{
+		StringData += Grey[rand() % 2];
+	}
+
+
+
+
+	StringData += SegmentStarts[1];
+
+	StringData += PartFlavourText[0];
+	if (SpellToGenerate.SpellConfiguration[3] == 0)
+	{
+		StringData += Blue[rand() % 3];
+	}
+	else if (SpellToGenerate.SpellConfiguration[3] == 1)
+	{
+		StringData += Red[rand() % 2];
+	}
+	else if (SpellToGenerate.SpellConfiguration[3] == 2)
+	{
+		StringData += Green[rand() % 3];
+	}
+	else
+	{
+		StringData += Grey[rand() % 2];
+	}
+
+
+	StringData += PartFlavourText[1];
+
+	if (SpellToGenerate.SpellConfiguration[4] == 0)
+	{
+		StringData += Blue[rand() % 3];
+	}
+	else if (SpellToGenerate.SpellConfiguration[4] == 1)
+	{
+		StringData += Red[rand() % 2];
+	}
+	else if (SpellToGenerate.SpellConfiguration[4] == 2)
+	{
+		StringData += Green[rand() % 3];
+	}
+	else
+	{
+		StringData += Grey[rand() % 2];
+	}
+
+	StringData += PartFlavourText[2];
+
+	if (SpellToGenerate.SpellConfiguration[5] == 0)
+	{
+		StringData += Blue[rand() % 3];
+	}
+	else if (SpellToGenerate.SpellConfiguration[5] == 1)
+	{
+		StringData += Red[rand() % 2];
+	}
+	else if (SpellToGenerate.SpellConfiguration[5] == 2)
+	{
+		StringData += Green[rand() % 3];
+	}
+	else
+	{
+		StringData += Grey[rand() % 2];
+	}
+
+
+	StringData += SegmentStarts[2];
+
+	StringData += PartFlavourText[0];
+	if (SpellToGenerate.SpellConfiguration[6] == 0)
+	{
+		StringData += Blue[rand() % 3];
+	}
+	else if (SpellToGenerate.SpellConfiguration[6] == 1)
+	{
+		StringData += Red[rand() % 2];
+	}
+	else if (SpellToGenerate.SpellConfiguration[6] == 2)
+	{
+		StringData += Green[rand() % 3];
+	}
+	else
+	{
+		StringData += Grey[rand() % 2];
+	}
+
+
+	StringData += PartFlavourText[1];
+
+	if (SpellToGenerate.SpellConfiguration[7] == 0)
+	{
+		StringData += Blue[rand() % 3];
+	}
+	else if (SpellToGenerate.SpellConfiguration[7] == 1)
+	{
+		StringData += Red[rand() % 2];
+	}
+	else if (SpellToGenerate.SpellConfiguration[7] == 2)
+	{
+		StringData += Green[rand() % 3];
+	}
+	else
+	{
+		StringData += Grey[rand() % 2];
+	}
+
+	StringData += PartFlavourText[2];
+
+	if (SpellToGenerate.SpellConfiguration[8] == 0)
+	{
+		StringData += Blue[rand() % 3];
+	}
+	else if (SpellToGenerate.SpellConfiguration[8] == 1)
+	{
+		StringData += Red[rand() % 2];
+	}
+	else if (SpellToGenerate.SpellConfiguration[8] == 2)
+	{
+		StringData += Green[rand() % 3];
+	}
+	else
+	{
+		StringData += Grey[rand() % 2];
+	}
+
+
+	return FText::AsCultureInvariant(StringData);
+}
+
+TArray<FSpellMaking> UUIFunctionLibrary::GenerateSpellConfigurations(class UDataTable* MagicTable)
+{
+	//Should only be called at the start of a new game
+	TArray<FSpellMaking> Output;
+	TArray<FName> RowNames = MagicTable->GetRowNames();
+	//FMagicSpellStruct* ItemData;
+	FSpellMaking Temp;
+	for (size_t i = 0; i < RowNames.Num(); i++)
+	{
+		Temp.SpellReference = RowNames[i];
+		//The spell configuration is made up of 9 random values 0-3.
+		Temp.SpellConfiguration.Empty();
+		for (size_t j = 0; j < 9; j++)
+		{
+			Temp.SpellConfiguration.Add(rand()%4);
+		}
+		Output.Add(Temp);
+	}
+	return Output;
+}
